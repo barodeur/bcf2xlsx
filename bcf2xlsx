@@ -1,0 +1,87 @@
+#!/usr/bin/env python
+
+from bcf import bcfxml
+import cv2
+import glob
+import numpy as np
+import openpyxl
+import os
+import sys
+import zipfile
+
+def convert(file_path):
+    file_name = os.path.basename(file_path)
+    file_name_without_ext = os.path.splitext(file_path)[0]
+
+    # Load the BCF file
+    bcf = bcfxml.load(file_path)
+
+    # Create a new Excel workbook
+    workbook = openpyxl.Workbook()
+
+    # Get the active worksheet
+    worksheet = workbook.active
+
+    # Write the project information to the first row
+    project = bcf.get_project()
+    worksheet.cell(row=1, column=1).value = "Project Name"
+    worksheet.cell(row=1, column=2).value = project.name
+
+    # Write the topic information to the subsequent rows
+    row = 2
+    topics = bcf.get_topics()
+    for guid, topic in topics.items():
+        # Write the topic GUID and title
+        worksheet.cell(row=row, column=1).value = "Topic GUID"
+        worksheet.cell(row=row, column=2).value = topic.guid
+        worksheet.cell(row=row, column=3).value = "Topic Title"
+        worksheet.cell(row=row, column=4).value = topic.title
+        
+        # Fetch extra data about the topic
+        header = bcf.get_header(guid)
+        comments = bcf.get_comments(guid)
+        viewpoints = bcf.get_viewpoints(guid)
+        
+        # Write the comment information
+        for comment_guid, comment in comments.items():
+            worksheet.cell(row=row, column=5).value = "Comment GUID"
+            worksheet.cell(row=row, column=6).value = comment.guid
+            worksheet.cell(row=row, column=7).value = "Comment"
+            worksheet.cell(row=row, column=8).value = comment.comment
+            worksheet.cell(row=row, column=9).value = "Comment Author"
+            worksheet.cell(row=row, column=10).value = comment.author
+     
+        # Write the viewpoint information
+        for viewpoint_guid, viewpoint in viewpoints.items():
+            worksheet.cell(row=row, column=11).value = "Viewpoint GUID"
+            worksheet.cell(row=row, column=12).value = viewpoint.guid
+
+        image_path = None
+        
+        with zipfile.ZipFile(file_path, "r") as zip_ref:
+            # Search for snapshot.png file with matching GUID
+            for file in zip_ref.namelist():
+                if file.endswith(".png") and file.startswith(guid):
+                    # Extract snapshot.png file
+                    image_path = file
+                    zip_ref.extract(file, "./tmp")
+
+        worksheet.add_image(openpyxl.drawing.image.Image(f"tmp/{image_path}"), "L" + str(row))
+        row += 1
+
+    # Save the workbook
+    workbook.save(f"{file_name_without_ext}.xlsx")
+
+def convert_dir(path):
+    for path in glob.glob(f"{path}/*.bcf"):
+        convert(path)
+
+paths = sys.argv[1:]
+if len(paths) == 0:
+    paths = ["./"]
+
+for path in paths:
+    if os.path.isdir(path):
+        convert_dir(path)
+    else:
+        convert(path)

@@ -1,0 +1,6 @@
+bcf-client
+numpy
+opencv-python
+openpyxl
+Pillow
+pyright
